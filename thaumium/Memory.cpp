@@ -5,7 +5,7 @@ void Memory::PatchBytes(uintptr_t ptr, const char* sig)
     std::vector<uint8_t> bytesVec = IdaPatternToByte(sig);
 
     DWORD oldprotection, newprotection;
-    VirtualProtect((LPVOID)ptr, 1, PAGE_EXECUTE_READWRITE, &oldprotection);
+    VirtualProtect((LPVOID)ptr, bytesVec.size(), PAGE_EXECUTE_READWRITE, &oldprotection);
 
     for (int i = 0; i < 10; i++)
     {
@@ -14,12 +14,13 @@ void Memory::PatchBytes(uintptr_t ptr, const char* sig)
         *code = val;
     }
 
-    VirtualProtect((LPVOID)ptr, 1, oldprotection, &newprotection);
+    VirtualProtect((LPVOID)ptr, bytesVec.size(), oldprotection, &newprotection);
 }
 
 std::vector<uint8_t> Memory::IdaPatternToByte(const char* sig)
 {
     std::vector<uint8_t> bytes = std::vector<uint8_t>();
+    bytes.reserve(std::strlen(sig)); // Pre-alloc space in memory for sig
 
     auto cast = const_cast<char*>(sig);
     auto end = const_cast<char*>(sig) + std::strlen(sig);
@@ -41,6 +42,8 @@ std::vector<uint8_t> Memory::IdaPatternToByte(const char* sig)
         }
     }
 
+    bytes.shrink_to_fit(); // fit alloc to vector size
+    
     return bytes;
 }
 
