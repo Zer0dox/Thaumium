@@ -4,42 +4,37 @@
 
 cGcTextChatInput::ParseTextForCommands fpParseTextForCommands = NULL;
 
-void __fastcall TextChatHandler::ParseTextForCommandsHook(cGcTextChatInput* _this, const cTkFixedString<1023, char> lMessageText)
-{
+using CommandFunction = void(*)(cGcTextChatInput*, const cTkFixedString<1023, char>&);
+
+static std::unordered_map<std::string, CommandFunction> commandLookup;
+
+void RegisterCommand(const std::string& command, CommandFunction func) {
+    commandLookup[command] = func;
+}
+
+CommandFunction GetCommandFunction(const std::string& command) {
+    auto it = commandLookup.find(command);
+    if (it != commandLookup.end())
+        return it->second;
+    else
+        return nullptr;
+}
+
+void __fastcall ParseTextForCommandsHook(cGcTextChatInput* _this, const cTkFixedString<1023, char> lMessageText) {
     std::string text = lMessageText.macBuffer;
-    if (text.length() < 2)
+    if (text.length() < 2 || text[0] != '/')
         return fpParseTextForCommands(_this, lMessageText); // avoid death
-    std::string postSlash = text.substr(1); // whatever is after / (lazy)
 
+    std::string command = text.substr(1); // get the command name after '/'
 
-    if (text[0] == '/')
-    {
-        spdlog::info("Potential command {}", text);
-
-        if (text == "/wires")
-        {
-            spdlog::warn("god I hate computers");
-
-            cGcApplication* gApplcation = GCAPPLICATION;
-            cGcApplication::GetSimulation getSimulation = (cGcApplication::GetSimulation)SIGSCAN(48 8B 41 38 48 05 10);
-            cGcSimulation* simulation = getSimulation(gApplcation);
-            cGcApplication::GetNetworkManager getNetworkManager = (cGcApplication::GetNetworkManager)OFFSET(0x1C2910);
-            cGcNetworkManager* network = getNetworkManager(gApplcation);
-            TkHandle* guh = new TkHandle();
-
-            cTkEngineUtils::AddNodes(guh, simulation->maGroupNodes[0], simulation->mSceneManager.mDeathDropRes.miInternalHandle);
-
-            cGcTextChatManager* textChat = reinterpret_cast<cGcTextChatManager*>(network->mTextChatManager);
-            cGcTextChatManager::Say say = (cGcTextChatManager::Say)OFFSET(0x94C160);
-            cTkFixedString<1023, char> msg = cTkFixedString<1023, char>("wires in MY wireless device!");
-            say(textChat, &msg, true);
-            return;
-        }
-    } 
+    CommandFunction func = GetCommandFunction(command);
+    if (func != nullptr) {
+        func(_this, lMessageText); 
+        return;
+    }
 
     return fpParseTextForCommands(_this, lMessageText);
 }
-
 void TextChatHandler::Init()
 {
     ADDHOOK(OFFSET(0x949870), ParseTextForCommandsHook, reinterpret_cast<LPVOID*>(&fpParseTextForCommands), cGcTextChatInput::ParseTextForCommands);
